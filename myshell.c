@@ -95,5 +95,5 @@ void my_process_command(size_t num_tokens, char **tokens) {
 
 void my_quit(void) {
     // Clean up function, called after "quit" is entered as a user command
-
+    printf("Goodbye!\n");
 }
