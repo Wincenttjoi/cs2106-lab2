@@ -9,6 +9,9 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#define STATUS_RUNNING -1
+#define STATUS_TERMINATED -2
+
 int PID_arr[MAX_PROCESSES];
 int pid_index;
 
@@ -24,7 +27,7 @@ void printInfo() {
         int child_pid = PID_arr[i];
         int child_stats = PID_status[i];
         // Process is running in the background
-        if (child_stats == -1) {
+        if (child_stats == STATUS_RUNNING) {
             int status;
             waitpid(child_pid, &status, WNOHANG);
             if (WIFEXITED(status)) {
@@ -33,7 +36,11 @@ void printInfo() {
             } else {
                 printf("[%i] Running\n", child_pid);
             }
-
+        }
+        else if (child_stats == STATUS_TERMINATED) {
+            int status;
+            waitpid(child_pid, &status, WNOHANG);
+            printf("Terminating\n");   
         } else {
             // Process has exited
             printf("[%i] Exited %d\n", child_pid, child_stats);
@@ -49,17 +56,35 @@ void my_process_command(size_t num_tokens, char **tokens) {
         tokens[num_tokens - 2] = '\0';
     }
 
-
     if (strcmp(tokens[0], "info") == 0) {
         // DO INFO
-            printInfo();
+        printInfo();
         return;
-
+    }
+    else if (strcmp(tokens[0], "wait") == 0) {
+        int pid_wait_argument = atoi(tokens[1]);
+        for (int i = 0; i < pid_index; i++) {
+            if (pid_wait_argument == PID_arr[i] && PID_status[i] == STATUS_RUNNING) {
+                int status;
+                waitpid(PID_arr[i], &status, 0);
+                PID_status[i] = WEXITSTATUS(status);
+            }
+        }
+    }
+    else if (strcmp(tokens[0], "terminate") == 0) {
+        int pid_wait_argument = atoi(tokens[1]);
+        for (int i = 0; i < pid_index; i++) {
+            if (pid_wait_argument == PID_arr[i] && PID_status[i] == STATUS_RUNNING) {
+                kill(PID_arr[i], SIGTERM);
+                PID_status[i] = STATUS_TERMINATED;
+            }
+        }
     } else {
         if( access(tokens[0], F_OK ) == -1) {
             printf("%s not found\n", tokens[0]);
             return;
         }
+
         int result = fork();
         if (result != 0) {
             // Parent code
@@ -74,7 +99,7 @@ void my_process_command(size_t num_tokens, char **tokens) {
             else {
             // Background
                 printf("Child[%i] in background\n", result);
-                PID_status[pid_index] = -1;
+                PID_status[pid_index] = STATUS_RUNNING;
             }
 
             pid_index++;
@@ -82,11 +107,11 @@ void my_process_command(size_t num_tokens, char **tokens) {
         } else {
             // Child code
             int isExecSuccessful = execvp(tokens[0], tokens);
+            // Error handling
             if (isExecSuccessful == -1) {
                 printf("%s not found\n", tokens[0]);
                 exit(1);
             }
-
         }
     }
 
