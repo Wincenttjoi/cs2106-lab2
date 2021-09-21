@@ -40,7 +40,12 @@ void printInfo() {
         else if (child_stats == STATUS_TERMINATED) {
             int status;
             waitpid(child_pid, &status, WNOHANG);
-            printf("Terminating\n");   
+            if (WIFEXITED(status) || (WTERMSIG(status) == SIGTERM)) {
+                PID_status[i] = WEXITSTATUS(status);
+                printf("[%i] Exited %d\n", child_pid, WEXITSTATUS(status));
+            } else {
+                printf("Terminating\n");   
+            }
         } else {
             // Process has exited
             printf("[%i] Exited %d\n", child_pid, child_stats);
