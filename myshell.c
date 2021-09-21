@@ -29,16 +29,6 @@ void my_init(void)
     pid_index = 0;
 }
 
-void print_string_array(char **array, int length)
-{
-    printf("======= PRINT STRING ARRAY =======\n");
-    for (int i = 0; i < length; i++)
-    {
-        printf("INDEX: %d | VALUE: %s\n", i, array[i]);
-    }
-    printf("======= /PRINT STRING ARRAY =======\n");
-}
-
 void printInfo()
 {
     for (int i = 0; i < pid_index; i++)
@@ -88,9 +78,6 @@ char **parseSingleCommand(char **source, int start, int end)
     return dest;
 }
 
-int processRedirection(int is_ambercent, char **tokens)
-{
-}
 
 int processCommand(int is_ambercent, char **tokens, int num_tokens)
 {
