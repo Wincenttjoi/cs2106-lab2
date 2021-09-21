@@ -14,6 +14,7 @@
 #define STATUS_TERMINATED -2
 #define PROCESS_SUCESS -3
 #define PROCESS_FAIL -4
+#define PROCESS_NOT_FOUND -5
 
 int PID_arr[MAX_PROCESSES];
 int pid_index;
@@ -97,7 +98,7 @@ int processCommand(int is_ambercent, char **tokens, int num_tokens)
     if (access(tokens[0], F_OK) == -1)
     {
         printf("%s not found\n", tokens[0]);
-        return PROCESS_FAIL;
+        return PROCESS_NOT_FOUND;
     }
 
     int result = fork();
@@ -135,7 +136,6 @@ int processCommand(int is_ambercent, char **tokens, int num_tokens)
     {
         // Child code
         // Check for any redirection
-        print_string_array(tokens, num_tokens);
         for (int i = 0; i < num_tokens - 2; i++)
         {
             char *file = tokens[i + 1];
@@ -145,6 +145,7 @@ int processCommand(int is_ambercent, char **tokens, int num_tokens)
                 if (access(tokens[i + 1], F_OK) == -1)
                 {
                     printf("%s does not exist\n", tokens[i + 1]);
+                    exit(1);
                     return PROCESS_FAIL;
                 }
                 int fd = open(file, O_RDONLY, S_IRUSR | S_IWUSR);
@@ -154,7 +155,7 @@ int processCommand(int is_ambercent, char **tokens, int num_tokens)
             }
             else if (strcmp(tokens[i], ">") == 0)
             {
-                int fd = open(file, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
+                int fd = open(file, O_WRONLY | O_CREAT | O_TRUNC, 0666);
                 dup2(fd, STDOUT_FILENO);
                 close(fd);
 
@@ -162,7 +163,7 @@ int processCommand(int is_ambercent, char **tokens, int num_tokens)
             }
             else if (strcmp(tokens[i], "2>") == 0)
             {
-                int fd = open(file, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
+                int fd = open(file, O_WRONLY | O_CREAT | O_TRUNC, 0666);
                 dup2(fd, STDERR_FILENO);
                 close(fd);
 
@@ -247,7 +248,7 @@ void my_process_command(size_t num_tokens, char **tokens)
             }
         }
 
-        if (prev > 0 && process_status != PROCESS_FAIL)
+        if (prev > 0 && process_status == PROCESS_SUCESS)
         {
             int length = num_tokens - prev;
             char **proc = parseSingleCommand(tokens, prev, num_tokens - 2);
