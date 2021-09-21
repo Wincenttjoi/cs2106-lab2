@@ -17,113 +17,202 @@ int pid_index;
 
 int PID_status[MAX_PROCESSES];
 
-void my_init(void) {
+char *commands[MAX_PROCESSES];
+
+void my_init(void)
+{
     // Initialize what you need here
     pid_index = 0;
 }
 
-void printInfo() {
-    for (int i = 0; i < pid_index; i++) {
+void print_string_array(char **array, int length)
+{
+    printf("======= PRINT STRING ARRAY =======\n");
+    for (int i = 0; i < length; i++)
+    {
+        printf("INDEX: %d | VALUE: %s\n", i, array[i]);
+    }
+    printf("======= /PRINT STRING ARRAY =======\n");
+}
+
+void printInfo()
+{
+    for (int i = 0; i < pid_index; i++)
+    {
         int child_pid = PID_arr[i];
         int child_stats = PID_status[i];
         // Process is running in the background
-        if (child_stats == STATUS_RUNNING) {
+        if (child_stats == STATUS_RUNNING)
+        {
             int status;
             waitpid(child_pid, &status, WNOHANG);
-            if (WIFEXITED(status)) {
+            if (WIFEXITED(status))
+            {
                 PID_status[i] = WEXITSTATUS(status);
                 printf("[%i] Exited %d\n", child_pid, WEXITSTATUS(status));
-            } else {
+            }
+            else
+            {
                 printf("[%i] Running\n", child_pid);
             }
         }
-        else if (child_stats == STATUS_TERMINATED) {
+        else if (child_stats == STATUS_TERMINATED)
+        {
             int status;
             waitpid(child_pid, &status, WNOHANG);
-            if (WIFEXITED(status) || (WTERMSIG(status) == SIGTERM)) {
+            if (WIFEXITED(status) || (WTERMSIG(status) == SIGTERM))
+            {
                 PID_status[i] = WEXITSTATUS(status);
                 printf("[%i] Exited %d\n", child_pid, WEXITSTATUS(status));
-            } else {
-                printf("Terminating\n");   
             }
-        } else {
+            else
+            {
+                printf("Terminating\n");
+            }
+        }
+        else
+        {
             // Process has exited
             printf("[%i] Exited %d\n", child_pid, child_stats);
         }
     }
 }
 
-void my_process_command(size_t num_tokens, char **tokens) {
+void my_process_command(size_t num_tokens, char **tokens)
+{
 
     int is_ambercent = 0;
-    if (strcmp(tokens[num_tokens - 2], "&") == 0) {
+    if (strcmp(tokens[num_tokens - 2], "&") == 0)
+    {
         is_ambercent = 1;
         tokens[num_tokens - 2] = '\0';
     }
 
-    if (strcmp(tokens[0], "info") == 0) {
+    if (strcmp(tokens[0], "info") == 0)
+    {
         // DO INFO
         printInfo();
         return;
     }
-    else if (strcmp(tokens[0], "wait") == 0) {
+    else if (strcmp(tokens[0], "wait") == 0)
+    {
         int pid_wait_argument = atoi(tokens[1]);
-        for (int i = 0; i < pid_index; i++) {
-            if (pid_wait_argument == PID_arr[i] && PID_status[i] == STATUS_RUNNING) {
+        for (int i = 0; i < pid_index; i++)
+        {
+            if (pid_wait_argument == PID_arr[i] && PID_status[i] == STATUS_RUNNING)
+            {
                 int status;
                 waitpid(PID_arr[i], &status, 0);
                 PID_status[i] = WEXITSTATUS(status);
             }
         }
     }
-    else if (strcmp(tokens[0], "terminate") == 0) {
+    else if (strcmp(tokens[0], "terminate") == 0)
+    {
         int pid_wait_argument = atoi(tokens[1]);
-        for (int i = 0; i < pid_index; i++) {
-            if (pid_wait_argument == PID_arr[i] && PID_status[i] == STATUS_RUNNING) {
+        for (int i = 0; i < pid_index; i++)
+        {
+            if (pid_wait_argument == PID_arr[i] && PID_status[i] == STATUS_RUNNING)
+            {
                 kill(PID_arr[i], SIGTERM);
                 PID_status[i] = STATUS_TERMINATED;
             }
         }
-    } else {
-        if( access(tokens[0], F_OK ) == -1) {
-            printf("%s not found\n", tokens[0]);
-            return;
+        // Running a program command
+    }
+    else
+    {
+
+        // Program exists
+
+        // Initialize command and args to settle &&
+        int total_ambercent = 0;
+        for (int i = 0; i < num_tokens - 1; i++)
+        {
+            if (strcmp(tokens[i], "&&") == 0)
+            {
+                total_ambercent++;
+            }
+        }
+        int total_functions = total_ambercent + 1;
+        char **command_and_args[total_functions];
+        printf("%i", total_functions);
+        command_and_args[0] = 0;
+        int cmd_args_counter = 1;
+        for (int i = 0; i < num_tokens - 1; i++)
+        {
+            if (strcmp(tokens[i], "&&") == 0)
+            {
+                // Put pointer to after &&
+                command_and_args[cmd_args_counter] = i + 1;
+                cmd_args_counter++;
+                // printf("command args %d, counter %d", command_and_args[cmd_args_counter], cmd_args_counter);
+
+                // Change && to NULL in tokens
+                tokens[i] = '\0';
+            }
         }
 
-        int result = fork();
-        if (result != 0) {
-            // Parent code
-            PID_arr[pid_index] = result;
-            
-            // Foreground
-            if (is_ambercent == 0) {
-                int status;
-                waitpid(result, &status, 0);
-                PID_status[pid_index] = WEXITSTATUS(status);
-            }
-            else {
-            // Background
-                printf("Child[%i] in background\n", result);
-                PID_status[pid_index] = STATUS_RUNNING;
-            }
-
-            pid_index++;
-
-        } else {
-            // Child code
-            int isExecSuccessful = execvp(tokens[0], tokens);
-            // Error handling
-            if (isExecSuccessful == -1) {
+        for (int command = 0; command < total_functions; command++)
+        {
+            // If program does not exist, return nothing
+            if (access(tokens[0], F_OK) == -1)
+            {
                 printf("%s not found\n", tokens[0]);
-                exit(1);
+                return;
+            }
+
+
+            int current_index = command_and_args[command];
+            int next_index = command_and_args[command + 1];
+            char **temp_command[next_index - current_index];
+            // memcpy(temp_command, tokens[current_index], next_index - current_index + 1);
+            // print_string_array(temp_command, next_index - current_index);
+            for (int i = 0; i < next_index - current_index; i++)
+            {
+                temp_command[i] = tokens[i + current_index];
+            }
+
+
+            int result = fork();
+            if (result != 0)
+            {
+                // Parent code
+                PID_arr[pid_index] = result;
+
+                // Foreground
+                if (is_ambercent == 0)
+                {
+                    int status;
+                    waitpid(result, &status, 0);
+                    PID_status[pid_index] = WEXITSTATUS(status);
+                }
+                else
+                {
+                    // Background
+                    printf("Child[%i] in background\n", result);
+                    PID_status[pid_index] = STATUS_RUNNING;
+                }
+
+                pid_index++;
+            }
+            else
+            {
+                // Child code
+                int isExecSuccessful = execvp(temp_command[0], temp_command);
+                // Error handling
+                if (isExecSuccessful == -1)
+                {
+                    printf("%s not found\n", temp_command[0]);
+                    exit(1);
+                }
             }
         }
     }
-
-
 }
 
-void my_quit(void) {
+void my_quit(void)
+{
     // Clean up function, called after "quit" is entered as a user command
     printf("Goodbye!\n");
 }
