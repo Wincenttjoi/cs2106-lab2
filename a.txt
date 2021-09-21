@@ -1,0 +1,4 @@
+world
+hello
+result=$1
+exit $result

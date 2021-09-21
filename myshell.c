@@ -42,40 +42,38 @@ void printInfo()
 {
     for (int i = 0; i < pid_index; i++)
     {
-        int child_pid = PID_arr[i];
-        int child_stats = PID_status[i];
         // Process is running in the background
         int status = 1;
-        if (child_stats == STATUS_RUNNING)
+        if (PID_status[i] == STATUS_RUNNING)
         {
-            waitpid(child_pid, &status, WNOHANG);
+            waitpid(PID_arr[i], &status, WNOHANG);
             if (WIFEXITED(status))
             {
-                child_stats = WEXITSTATUS(status);
-                printf("[%i] Exited %d\n", child_pid, child_stats);
+                PID_status[i] = WEXITSTATUS(status);
+                printf("[%i] Exited %d\n", PID_arr[i], PID_status[i]);
             }
             else
             {
-                printf("[%i] Running\n", child_pid);
+                printf("[%i] Running\n", PID_arr[i]);
             }
         }
-        else if (child_stats == STATUS_TERMINATED)
+        else if (PID_status[i] == STATUS_TERMINATED)
         {
-            waitpid(child_pid, &status, WNOHANG);
+            waitpid(PID_arr[i], &status, WNOHANG);
             if (WIFEXITED(status) || (WTERMSIG(status) == SIGTERM))
             {
-                child_stats = WEXITSTATUS(status);
-                printf("[%i] Exited %d\n", child_pid, child_stats);
+                PID_status[i] = WEXITSTATUS(status);
+                printf("[%i] Exited %d\n", PID_arr[i], PID_status[i]);
             }
             else
             {
-                printf("[%i] Terminating\n", child_pid);
+                printf("[%i] Terminating\n", PID_arr[i]);
             }
         }
         else
         {
             // Process has exited
-            printf("[%i] Exited %d\n", child_pid, child_stats);
+            printf("[%i] Exited %d\n", PID_arr[i], PID_status[i]);
         }
     }
 }
@@ -137,6 +135,7 @@ int processCommand(int is_ambercent, char **tokens, int num_tokens)
     {
         // Child code
         // Check for any redirection
+        print_string_array(tokens, num_tokens);
         for (int i = 0; i < num_tokens - 2; i++)
         {
             char *file = tokens[i + 1];
@@ -242,7 +241,7 @@ void my_process_command(size_t num_tokens, char **tokens)
 
                 if (process_status == PROCESS_FAIL)
                 {
-                    // printf("%s failed\n", proc[0]);
+                    printf("%s failed\n", proc[0]);
                     break;
                 }
             }
