@@ -8,6 +8,7 @@
 #include "myshell.h"
 #include <sys/wait.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 #define STATUS_RUNNING -1
 #define STATUS_TERMINATED -2
@@ -44,14 +45,14 @@ void printInfo()
         int child_pid = PID_arr[i];
         int child_stats = PID_status[i];
         // Process is running in the background
+        int status = 1;
         if (child_stats == STATUS_RUNNING)
         {
-            int status;
             waitpid(child_pid, &status, WNOHANG);
             if (WIFEXITED(status))
             {
-                PID_status[i] = WEXITSTATUS(status);
-                printf("[%i] Exited %d\n", child_pid, WEXITSTATUS(status));
+                child_stats = WEXITSTATUS(status);
+                printf("[%i] Exited %d\n", child_pid, child_stats);
             }
             else
             {
@@ -60,16 +61,15 @@ void printInfo()
         }
         else if (child_stats == STATUS_TERMINATED)
         {
-            int status;
             waitpid(child_pid, &status, WNOHANG);
             if (WIFEXITED(status) || (WTERMSIG(status) == SIGTERM))
             {
-                PID_status[i] = WEXITSTATUS(status);
-                printf("[%i] Exited %d\n", child_pid, WEXITSTATUS(status));
+                child_stats = WEXITSTATUS(status);
+                printf("[%i] Exited %d\n", child_pid, child_stats);
             }
             else
             {
-                printf("Terminating\n");
+                printf("[%i] Terminating\n", child_pid);
             }
         }
         else
@@ -89,12 +89,25 @@ char **parseSingleCommand(char **source, int start, int end)
     return dest;
 }
 
-int processCommand(int is_ambercent, char **tokens)
+int checkFileExists(char **tokens)
 {
     // If program does not exist, return nothing
     if (access(tokens[0], F_OK) == -1)
     {
         printf("%s not found\n", tokens[0]);
+        return PROCESS_FAIL;
+    }
+}
+
+int processRedirection(int is_ambercent, char **tokens)
+{
+}
+
+int processCommand(int is_ambercent, char **tokens, int num_tokens)
+{
+    // Check file exists, if not will return process fail
+    int x = checkFileExists(tokens);
+    if (x == PROCESS_FAIL) {
         return PROCESS_FAIL;
     }
 
@@ -132,6 +145,44 @@ int processCommand(int is_ambercent, char **tokens)
     else
     {
         // Child code
+
+        // Check for any redirection
+        for (int i = 0; i < num_tokens - 1; i++)
+        {
+            char *file = tokens[i + 1];
+            if (strcmp(tokens[i], "<") == 0)
+            {
+                // If file does not exist, fail
+                int x = checkFileExists(tokens[i + 1]);
+                if (x == PROCESS_FAIL) {
+                    return PROCESS_FAIL;
+                }
+                int fd = open(file, O_RDONLY, S_IWUSR | S_IRUSR);
+                dup2(fd, STDIN_FILENO);
+                // close(fd);
+                tokens[i] = '\0';
+            }
+            else if (strcmp(tokens[i], ">") == 0)
+            {
+                printf("THIS IS FILE: %s\n", file);
+                int fd = open(file, O_WRONLY | O_CREAT, S_IWUSR | S_IRUSR);
+                dup2(fd, STDOUT_FILENO);
+                // close(fd);
+
+                tokens[i] = '\0';
+            }
+            else if (strcmp(tokens[i], "2>") == 0)
+            {
+                printf("THIS IS FILE: %s\n", file);
+                int fd = open(file, O_WRONLY | O_CREAT, S_IWUSR | S_IRUSR);
+                dup2(fd, STDERR_FILENO);
+                // close(fd);
+
+                tokens[i] = '\0';
+            }
+        }
+        print_string_array(tokens, num_tokens);
+
         int isExecSuccessful = execvp(tokens[0], tokens);
         // Error handling
         if (isExecSuccessful == -1)
@@ -194,8 +245,9 @@ void my_process_command(size_t num_tokens, char **tokens)
         {
             if (strcmp(tokens[i], "&&") == 0)
             {
+                int length = i + 1 - prev;
                 char **proc = parseSingleCommand(tokens, prev, i - 1);
-                process_status = processCommand(0, proc);
+                process_status = processCommand(0, proc, length);
                 prev = i + 1;
 
                 if (process_status == PROCESS_FAIL)
@@ -206,15 +258,16 @@ void my_process_command(size_t num_tokens, char **tokens)
             }
         }
 
+        int length = num_tokens - prev;
         if (prev > 0 && process_status == PROCESS_SUCESS)
         {
             char **proc = parseSingleCommand(tokens, prev, num_tokens - 2);
-            processCommand(0, proc);
+            processCommand(0, proc, length);
         }
 
         if (prev == 0)
         {
-            processCommand(is_ambercent, tokens);
+            processCommand(is_ambercent, tokens, length);
         }
     }
 }
