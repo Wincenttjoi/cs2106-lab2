@@ -89,16 +89,6 @@ char **parseSingleCommand(char **source, int start, int end)
     return dest;
 }
 
-int checkFileExists(char **tokens)
-{
-    // If program does not exist, return nothing
-    if (access(tokens[0], F_OK) == -1)
-    {
-        printf("%s not found\n", tokens[0]);
-        return PROCESS_FAIL;
-    }
-}
-
 int processRedirection(int is_ambercent, char **tokens)
 {
 }
@@ -106,8 +96,9 @@ int processRedirection(int is_ambercent, char **tokens)
 int processCommand(int is_ambercent, char **tokens, int num_tokens)
 {
     // Check file exists, if not will return process fail
-    int x = checkFileExists(tokens);
-    if (x == PROCESS_FAIL) {
+    if (access(tokens[0], F_OK) == -1)
+    {
+        printf("%s not found\n", tokens[0]);
         return PROCESS_FAIL;
     }
 
@@ -145,43 +136,40 @@ int processCommand(int is_ambercent, char **tokens, int num_tokens)
     else
     {
         // Child code
-
         // Check for any redirection
-        for (int i = 0; i < num_tokens - 1; i++)
+        for (int i = 0; i < num_tokens - 2; i++)
         {
             char *file = tokens[i + 1];
             if (strcmp(tokens[i], "<") == 0)
             {
-                // If file does not exist, fail
-                int x = checkFileExists(tokens[i + 1]);
-                if (x == PROCESS_FAIL) {
+
+                if (access(tokens[i + 1], F_OK) == -1)
+                {
+                    printf("%s does not exist\n", tokens[i + 1]);
                     return PROCESS_FAIL;
                 }
-                int fd = open(file, O_RDONLY, S_IWUSR | S_IRUSR);
+                int fd = open(file, O_RDONLY, S_IRUSR | S_IWUSR);
                 dup2(fd, STDIN_FILENO);
-                // close(fd);
+                close(fd);
                 tokens[i] = '\0';
             }
             else if (strcmp(tokens[i], ">") == 0)
             {
-                printf("THIS IS FILE: %s\n", file);
-                int fd = open(file, O_WRONLY | O_CREAT, S_IWUSR | S_IRUSR);
+                int fd = open(file, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
                 dup2(fd, STDOUT_FILENO);
-                // close(fd);
+                close(fd);
 
                 tokens[i] = '\0';
             }
             else if (strcmp(tokens[i], "2>") == 0)
             {
-                printf("THIS IS FILE: %s\n", file);
-                int fd = open(file, O_WRONLY | O_CREAT, S_IWUSR | S_IRUSR);
+                int fd = open(file, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
                 dup2(fd, STDERR_FILENO);
-                // close(fd);
+                close(fd);
 
                 tokens[i] = '\0';
             }
         }
-        print_string_array(tokens, num_tokens);
 
         int isExecSuccessful = execvp(tokens[0], tokens);
         // Error handling
@@ -212,6 +200,7 @@ void my_process_command(size_t num_tokens, char **tokens)
                 int status;
                 waitpid(PID_arr[i], &status, 0);
                 PID_status[i] = WEXITSTATUS(status);
+                break;
             }
         }
         return;
@@ -225,6 +214,7 @@ void my_process_command(size_t num_tokens, char **tokens)
             {
                 kill(PID_arr[i], SIGTERM);
                 PID_status[i] = STATUS_TERMINATED;
+                break;
             }
         }
         return;
@@ -240,7 +230,7 @@ void my_process_command(size_t num_tokens, char **tokens)
         }
 
         int prev = 0;
-        int process_status;
+        int process_status = 0;
         for (int i = 0; i < num_tokens - 2; i++)
         {
             if (strcmp(tokens[i], "&&") == 0)
@@ -258,16 +248,16 @@ void my_process_command(size_t num_tokens, char **tokens)
             }
         }
 
-        int length = num_tokens - prev;
-        if (prev > 0 && process_status == PROCESS_SUCESS)
+        if (prev > 0 && process_status != PROCESS_FAIL)
         {
+            int length = num_tokens - prev;
             char **proc = parseSingleCommand(tokens, prev, num_tokens - 2);
             processCommand(0, proc, length);
         }
 
         if (prev == 0)
         {
-            processCommand(is_ambercent, tokens, length);
+            processCommand(is_ambercent, tokens, num_tokens);
         }
     }
 }
