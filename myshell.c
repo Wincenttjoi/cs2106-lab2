@@ -7,6 +7,7 @@
 
 #include "myshell.h"
 #include <sys/wait.h>
+#include <unistd.h>
 
 int PID_arr[MAX_PROCESSES];
 int pid_index;
@@ -22,24 +23,20 @@ void printInfo() {
     for (int i = 0; i < pid_index; i++) {
         int child_pid = PID_arr[i];
         int child_stats = PID_status[i];
-        if (child_stats != -1) {
-            // Process is running in the background
-            if (child_stats == 0) {
-                int status;
-                waitpid(child_pid, &status, WNOHANG);
-                if (WIFEXITED(status)) {
-                    PID_status[i] = status;
-                    printf("[%i] Exited %d\n", child_pid, status);
-                } else {
-                    printf("[%i] Running\n", child_pid);
-                }
-
+        // Process is running in the background
+        if (child_stats == -1) {
+            int status;
+            waitpid(child_pid, &status, WNOHANG);
+            if (WIFEXITED(status)) {
+                PID_status[i] = WEXITSTATUS(status);
+                printf("[%i] Exited %d\n", child_pid, WEXITSTATUS(status));
             } else {
-                // Process has exited
-                printf("[%i] Exited %d\n", child_pid, child_stats);
+                printf("[%i] Running\n", child_pid);
             }
+
         } else {
-            printf("Error statement here");
+            // Process has exited
+            printf("[%i] Exited %d\n", child_pid, child_stats);
         }
     }
 }
@@ -55,12 +52,14 @@ void my_process_command(size_t num_tokens, char **tokens) {
 
     if (strcmp(tokens[0], "info") == 0) {
         // DO INFO
-        // for (int i = 1; i < MAX_PROCESSES && isdigit(PID_arr[i]); i++) {
             printInfo();
-        // }
         return;
 
     } else {
+        if( access(tokens[0], F_OK ) == -1) {
+            printf("%s not found\n", tokens[0]);
+            return;
+        }
         int result = fork();
         if (result != 0) {
             // Parent code
@@ -70,12 +69,12 @@ void my_process_command(size_t num_tokens, char **tokens) {
             if (is_ambercent == 0) {
                 int status;
                 waitpid(result, &status, 0);
-                PID_status[pid_index] = status;
+                PID_status[pid_index] = WEXITSTATUS(status);
             }
             else {
             // Background
                 printf("Child[%i] in background\n", result);
-                PID_status[pid_index] = 0;
+                PID_status[pid_index] = -1;
             }
 
             pid_index++;
