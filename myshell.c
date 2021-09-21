@@ -81,10 +81,10 @@ void printInfo()
 
 char **parseSingleCommand(char **source, int start, int end)
 {
-    int length = (end - start + 1) * sizeof(*source);
+    int length = (int *)((end - start + 1) * sizeof(*source));
     char **dest = malloc(length);
     memcpy(dest, source + start, length);
-    dest[end - start + 1] = '\0';
+    dest[end - start + 1] = NULL;
     return dest;
 }
 
@@ -151,7 +151,7 @@ int processCommand(int is_ambercent, char **tokens, int num_tokens)
                 int fd = open(file, O_RDONLY, S_IRUSR | S_IWUSR);
                 dup2(fd, STDIN_FILENO);
                 close(fd);
-                tokens[i] = '\0';
+                tokens[i] = NULL;
             }
             else if (strcmp(tokens[i], ">") == 0)
             {
@@ -159,7 +159,7 @@ int processCommand(int is_ambercent, char **tokens, int num_tokens)
                 dup2(fd, STDOUT_FILENO);
                 close(fd);
 
-                tokens[i] = '\0';
+                tokens[i] = NULL;
             }
             else if (strcmp(tokens[i], "2>") == 0)
             {
@@ -167,7 +167,7 @@ int processCommand(int is_ambercent, char **tokens, int num_tokens)
                 dup2(fd, STDERR_FILENO);
                 close(fd);
 
-                tokens[i] = '\0';
+                tokens[i] = NULL;
             }
         }
 
@@ -226,7 +226,7 @@ void my_process_command(size_t num_tokens, char **tokens)
         if (strcmp(tokens[num_tokens - 2], "&") == 0)
         {
             is_ambercent = 1;
-            tokens[num_tokens - 2] = '\0';
+            tokens[num_tokens - 2] = NULL;
         }
 
         int prev = 0;
@@ -235,14 +235,20 @@ void my_process_command(size_t num_tokens, char **tokens)
         {
             if (strcmp(tokens[i], "&&") == 0)
             {
-                int length = i + 1 - prev;
-                char **proc = parseSingleCommand(tokens, prev, i - 1);
-                process_status = processCommand(0, proc, length);
+                // int length = i + 1 - prev;
+                // char **proc = parseSingleCommand(tokens, prev, i - 1);
+                int length = (int *)((i - prev + 1) * sizeof(*tokens));
+                char **prog = malloc(length);
+                memcpy(prog, tokens + prev, length);
+                prog[i - prev] = NULL;
+
+                process_status = processCommand(0, prog, i - prev + 1);
                 prev = i + 1;
+                free(prog);
 
                 if (process_status == PROCESS_FAIL)
                 {
-                    printf("%s failed\n", proc[0]);
+                    printf("%s failed\n", prog[0]);
                     break;
                 }
             }
@@ -250,9 +256,15 @@ void my_process_command(size_t num_tokens, char **tokens)
 
         if (prev > 0 && process_status == PROCESS_SUCESS)
         {
-            int length = num_tokens - prev;
-            char **proc = parseSingleCommand(tokens, prev, num_tokens - 2);
-            processCommand(0, proc, length);
+            // char **proc = parseSingleCommand(tokens, prev, num_tokens - 2);
+
+            int length = (int *)((num_tokens - prev) * sizeof(*tokens));
+            char **prog = malloc(length);
+            memcpy(prog, tokens + prev, length);
+            prog[num_tokens - prev - 1] = NULL;
+
+            processCommand(0, prog, num_tokens - prev);
+            free(prog);
         }
 
         if (prev == 0)
@@ -267,6 +279,7 @@ void my_quit(void)
     // Clean up function, called after "quit" is entered as a user command
     for (int i = 0; i < pid_index; i++)
     {
+        // free(PID_arr[i]);
         kill(PID_arr[i], SIGTERM);
         waitpid(PID_arr[i], NULL, 0);
     }
