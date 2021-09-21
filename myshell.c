@@ -11,6 +11,8 @@
 
 #define STATUS_RUNNING -1
 #define STATUS_TERMINATED -2
+#define PROCESS_SUCESS -3
+#define PROCESS_FAIL -4
 
 int PID_arr[MAX_PROCESSES];
 int pid_index;
@@ -78,15 +80,70 @@ void printInfo()
     }
 }
 
+char **parseSingleCommand(char **source, int start, int end)
+{
+    int length = (end - start + 1) * sizeof(*source);
+    char **dest = malloc(length);
+    memcpy(dest, source + start, length);
+    dest[end - start + 1] = '\0';
+    return dest;
+}
+
+int processCommand(int is_ambercent, char **tokens)
+{
+    // If program does not exist, return nothing
+    if (access(tokens[0], F_OK) == -1)
+    {
+        printf("%s not found\n", tokens[0]);
+        return PROCESS_FAIL;
+    }
+
+    int result = fork();
+    if (result != 0)
+    {
+        // Parent code
+        PID_arr[pid_index] = result;
+
+        // Foreground
+        if (is_ambercent == 0)
+        {
+            int status;
+            waitpid(result, &status, 0);
+            PID_status[pid_index] = WEXITSTATUS(status);
+        }
+        else
+        {
+            // Background
+            printf("Child[%i] in background\n", result);
+            PID_status[pid_index] = STATUS_RUNNING;
+        }
+
+        pid_index++;
+
+        if (PID_status[pid_index - 1] == 0)
+        {
+            return PROCESS_SUCESS;
+        }
+        else
+        {
+            return PROCESS_FAIL;
+        }
+    }
+    else
+    {
+        // Child code
+        int isExecSuccessful = execvp(tokens[0], tokens);
+        // Error handling
+        if (isExecSuccessful == -1)
+        {
+            printf("%s not found\n", tokens[0]);
+            exit(1);
+        }
+    }
+}
+
 void my_process_command(size_t num_tokens, char **tokens)
 {
-
-    int is_ambercent = 0;
-    if (strcmp(tokens[num_tokens - 2], "&") == 0)
-    {
-        is_ambercent = 1;
-        tokens[num_tokens - 2] = '\0';
-    }
 
     if (strcmp(tokens[0], "info") == 0)
     {
@@ -106,6 +163,7 @@ void my_process_command(size_t num_tokens, char **tokens)
                 PID_status[i] = WEXITSTATUS(status);
             }
         }
+        return;
     }
     else if (strcmp(tokens[0], "terminate") == 0)
     {
@@ -118,95 +176,45 @@ void my_process_command(size_t num_tokens, char **tokens)
                 PID_status[i] = STATUS_TERMINATED;
             }
         }
-        // Running a program command
+        return;
     }
     else
     {
-
         // Program exists
+        int is_ambercent = 0;
+        if (strcmp(tokens[num_tokens - 2], "&") == 0)
+        {
+            is_ambercent = 1;
+            tokens[num_tokens - 2] = '\0';
+        }
 
-        // Initialize command and args to settle &&
-        int total_ambercent = 0;
-        for (int i = 0; i < num_tokens - 1; i++)
+        int prev = 0;
+        int process_status;
+        for (int i = 0; i < num_tokens - 2; i++)
         {
             if (strcmp(tokens[i], "&&") == 0)
             {
-                total_ambercent++;
-            }
-        }
-        int total_functions = total_ambercent + 1;
-        char **command_and_args[total_functions];
-        printf("%i", total_functions);
-        command_and_args[0] = 0;
-        int cmd_args_counter = 1;
-        for (int i = 0; i < num_tokens - 1; i++)
-        {
-            if (strcmp(tokens[i], "&&") == 0)
-            {
-                // Put pointer to after &&
-                command_and_args[cmd_args_counter] = i + 1;
-                cmd_args_counter++;
-                // printf("command args %d, counter %d", command_and_args[cmd_args_counter], cmd_args_counter);
+                char **proc = parseSingleCommand(tokens, prev, i - 1);
+                process_status = processCommand(0, proc);
+                prev = i + 1;
 
-                // Change && to NULL in tokens
-                tokens[i] = '\0';
+                if (process_status == PROCESS_FAIL)
+                {
+                    // printf("%s failed\n", proc[0]);
+                    break;
+                }
             }
         }
 
-        for (int command = 0; command < total_functions; command++)
+        if (prev > 0 && process_status == PROCESS_SUCESS)
         {
-            // If program does not exist, return nothing
-            if (access(tokens[0], F_OK) == -1)
-            {
-                printf("%s not found\n", tokens[0]);
-                return;
-            }
+            char **proc = parseSingleCommand(tokens, prev, num_tokens - 2);
+            processCommand(0, proc);
+        }
 
-
-            int current_index = command_and_args[command];
-            int next_index = command_and_args[command + 1];
-            char **temp_command[next_index - current_index];
-            // memcpy(temp_command, tokens[current_index], next_index - current_index + 1);
-            // print_string_array(temp_command, next_index - current_index);
-            for (int i = 0; i < next_index - current_index; i++)
-            {
-                temp_command[i] = tokens[i + current_index];
-            }
-
-
-            int result = fork();
-            if (result != 0)
-            {
-                // Parent code
-                PID_arr[pid_index] = result;
-
-                // Foreground
-                if (is_ambercent == 0)
-                {
-                    int status;
-                    waitpid(result, &status, 0);
-                    PID_status[pid_index] = WEXITSTATUS(status);
-                }
-                else
-                {
-                    // Background
-                    printf("Child[%i] in background\n", result);
-                    PID_status[pid_index] = STATUS_RUNNING;
-                }
-
-                pid_index++;
-            }
-            else
-            {
-                // Child code
-                int isExecSuccessful = execvp(temp_command[0], temp_command);
-                // Error handling
-                if (isExecSuccessful == -1)
-                {
-                    printf("%s not found\n", temp_command[0]);
-                    exit(1);
-                }
-            }
+        if (prev == 0)
+        {
+            processCommand(is_ambercent, tokens);
         }
     }
 }
@@ -214,5 +222,10 @@ void my_process_command(size_t num_tokens, char **tokens)
 void my_quit(void)
 {
     // Clean up function, called after "quit" is entered as a user command
+    for (int i = 0; i < pid_index; i++)
+    {
+        kill(PID_arr[i], SIGTERM);
+        waitpid(PID_arr[i], NULL, 0);
+    }
     printf("Goodbye!\n");
 }
